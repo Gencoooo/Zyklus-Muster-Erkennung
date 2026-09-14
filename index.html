@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#0f172a" />
+<title>Zyklus-Challenge</title>
+<style>
+:root{
+  --bg:#0b1220; --panel:#111827; --panel2:#172033; --text:#f8fafc;
+  --muted:#94a3b8; --accent:#38bdf8; --good:#22c55e; --warn:#f59e0b;
+  --bad:#ef4444; --line:#263244; --chip:#1e293b;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+body{min-height:100vh;padding-bottom:92px}
+header{position:sticky;top:0;z-index:5;background:rgba(11,18,32,.94);backdrop-filter:blur(14px);padding:18px 16px 12px;border-bottom:1px solid var(--line)}
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:var(--muted);font-size:13px}
+.person-bar{display:flex;gap:8px;align-items:center;margin-top:12px}
+.person-bar select{flex:1;margin:0;min-width:0}
+.person-add,.person-manage{
+  border:1px solid var(--line);background:var(--panel2);color:var(--text);
+  border-radius:12px;padding:11px 12px;font-size:14px;font-weight:700;white-space:nowrap
+}
+.person-modal{
+  position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.65);
+  display:flex;align-items:center;justify-content:center;padding:18px
+}
+.person-modal-card{
+  width:min(92vw,430px);background:var(--panel);border:1px solid var(--line);
+  border-radius:18px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.35)
+}
+.person-list{max-height:300px;overflow:auto;margin:12px 0}
+.person-row{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.person-row:last-child{border-bottom:0}
+.person-name{flex:1;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.person-row button{
+  border:1px solid var(--line);background:var(--panel2);color:var(--text);
+  border-radius:10px;padding:8px 10px;font-size:12px
+}
+main{max-width:720px;margin:0 auto;padding:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.card h2{font-size:16px;margin:0 0 12px}
+.row{display:flex;gap:10px;align-items:center}
+.space{justify-content:space-between}
+label{font-size:14px}
+input[type="date"],textarea,select{
+  width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);
+  border-radius:12px;padding:12px;font-size:16px;outline:none
+}
+textarea{min-height:78px;resize:vertical}
+.metric{margin:14px 0}
+.metric-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.metric-name{font-weight:600}
+.value-badge{min-width:36px;text-align:center;background:var(--chip);border-radius:999px;padding:5px 10px;font-weight:700}
+.scale{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.scale button{
+  border:1px solid var(--line);background:var(--panel2);color:var(--text);
+  border-radius:12px;padding:12px 0;font-size:16px;font-weight:700
+}
+.scale button.active{background:var(--accent);color:#00111a;border-color:transparent}
+.toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.toggle button{
+  border:1px solid var(--line);background:var(--panel2);color:var(--text);
+  border-radius:12px;padding:12px;font-size:15px;font-weight:700
+}
+.toggle button.active{background:var(--accent);color:#00111a;border-color:transparent}
+.primary,.secondary,.danger{
+  width:100%;border:0;border-radius:14px;padding:14px;font-size:16px;font-weight:800
+}
+.primary{background:var(--accent);color:#00111a}
+.secondary{background:var(--chip);color:var(--text);border:1px solid var(--line)}
+.danger{background:#3a1518;color:#fecaca;border:1px solid #7f1d1d}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--panel2);border-radius:14px;padding:14px}
+.stat .k{font-size:12px;color:var(--muted);margin-bottom:5px}
+.stat .v{font-size:22px;font-weight:800}
+.meter{height:12px;background:#1f2937;border-radius:999px;overflow:hidden;margin-top:8px}
+.meter > div{height:100%;background:linear-gradient(90deg,var(--good),var(--warn),var(--bad));width:0}
+.item{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:0}
+.item .date{font-weight:700}
+.item .mini{font-size:12px;color:var(--muted);margin-top:3px}
+.badge{font-size:12px;padding:5px 8px;border-radius:999px;background:var(--chip);white-space:nowrap}
+.badge.hot{background:#3a1f0d;color:#fdba74}
+.empty{color:var(--muted);text-align:center;padding:18px 6px}
+.notice{font-size:13px;line-height:1.45;color:#cbd5e1}
+nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:10;
+  display:grid;grid-template-columns:repeat(4,1fr);background:rgba(15,23,42,.97);
+  border-top:1px solid var(--line);padding:8px 8px calc(8px + env(safe-area-inset-bottom))
+}
+nav button{background:none;border:0;color:var(--muted);padding:8px 2px;font-size:12px}
+nav button.active{color:var(--accent);font-weight:800}
+.icon{font-size:20px;display:block;margin-bottom:3px}
+.hidden{display:none!important}
+canvas{width:100%;height:180px;background:var(--panel2);border-radius:14px}
+.small{font-size:12px;color:var(--muted)}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+@media (max-width:390px){
+  main{padding:12px}.card{padding:14px}.scale button{padding:11px 0}
+}
+</style>
+
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Zyklus Challenge">
+
+</head>
+<body>
+<header>
+  <h1>Zyklus-Challenge</h1>
+  <div class="sub">Blindes Verhaltensprojekt · Daten bleiben auf diesem Gerät</div>
+  <div class="person-bar">
+    <select id="personSelect" aria-label="Person auswählen"></select>
+    <button class="person-add" id="addPersonBtn">+ Person</button>
+    <button class="person-manage" id="managePeopleBtn">Verwalten</button>
+  </div>
+</header>
+
+<main>
+<section id="todayView">
+  <div class="card">
+    <h2>Heutige Bewertung</h2>
+    <label>Datum</label>
+    <input id="dateInput" type="date" />
+  </div>
+
+  <div class="card" id="metricsCard">
+    <h2>Beobachtungen</h2>
+    <div id="metrics"></div>
+    <hr>
+    <div class="metric">
+      <div class="metric-head"><span class="metric-name">Störfaktor?</span><span class="small">z. B. Krankheit, Streit, kaum Schlaf</span></div>
+      <div class="toggle">
+        <button type="button" data-disturbance="false" class="active">Nein</button>
+        <button type="button" data-disturbance="true">Ja</button>
+      </div>
+    </div>
+    <label>Notiz (optional)</label>
+    <textarea id="noteInput" placeholder="Kurze Besonderheit des Tages …"></textarea>
+  </div>
+
+  <div class="card">
+    <button class="primary" id="saveBtn">Tag speichern</button>
+    <div class="small" style="margin-top:10px;text-align:center">Ein vorhandener Eintrag für dieses Datum wird aktualisiert.</div>
+  </div>
+</section>
+
+<section id="historyView" class="hidden">
+  <div class="card">
+    <div class="row space">
+      <h2 style="margin:0">Verlauf</h2>
+      <span class="badge" id="entryCount">0 Einträge</span>
+    </div>
+    <div id="historyList"></div>
+  </div>
+</section>
+
+<section id="analysisView" class="hidden">
+  <div class="card">
+    <h2>Auswertung</h2>
+    <div class="grid2">
+      <div class="stat"><div class="k">Aktueller Score</div><div class="v" id="currentScore">–</div></div>
+      <div class="stat"><div class="k">Verdachtsereignisse</div><div class="v" id="eventCount">0</div></div>
+      <div class="stat"><div class="k">Geschätzter Rhythmus</div><div class="v" id="rhythm">–</div></div>
+      <div class="stat"><div class="k">Nächstes ähnliches Ereignis</div><div class="v" id="nextEvent" style="font-size:18px">–</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Score-Verlauf</h2>
+    <canvas id="chart" width="640" height="240"></canvas>
+    <div class="small" style="margin-top:8px">Der Score steigt bei niedriger Energie/Stimmung und höherer Reizbarkeit, Emotionalität und Stress.</div>
+  </div>
+
+  <div class="card">
+    <h2>Interpretation</h2>
+    <div class="notice" id="analysisText"></div>
+  </div>
+</section>
+
+<section id="settingsView" class="hidden">
+  <div class="card">
+    <h2>Einstellungen</h2>
+    <label>Verdachts-Schwelle</label>
+    <select id="thresholdSelect">
+      <option value="60">60</option>
+      <option value="65">65</option>
+      <option value="70" selected>70</option>
+      <option value="75">75</option>
+      <option value="80">80</option>
+    </select>
+    <div class="small" style="margin-top:7px">Höher = weniger, aber strengere Verdachtsereignisse.</div>
+  </div>
+
+  <div class="card">
+    <h2>Daten</h2>
+    <div class="grid2">
+      <button class="secondary" id="exportBtn">Exportieren</button>
+      <button class="secondary" id="importBtn">Importieren</button>
+    </div>
+    <input id="importFile" class="hidden" type="file" accept=".json,application/json" />
+    <div style="height:10px"></div>
+    <button class="danger" id="resetBtn">Daten dieser Person löschen</button>
+  </div>
+
+  <div class="card">
+    <h2>Wichtig</h2>
+    <div class="notice">
+      Diese App enthält absichtlich <b>keine Eingabe der tatsächlichen Periode</b>. Sie sucht nur nach wiederkehrenden Verhaltensmustern.
+      Ein gefundener Rhythmus kann auch durch Arbeit, Schule, Wochenenden, Schlaf oder Stress entstehen. Die Auswertung ist ein Experiment und keine medizinische Bestimmung.
+    </div>
+  </div>
+</section>
+</main>
+
+<div id="personModal" class="person-modal hidden">
+  <div class="person-modal-card">
+    <div class="row space">
+      <h2 style="margin:0">Personen verwalten</h2>
+      <button class="person-manage" id="closePersonModal">Schliessen</button>
+    </div>
+    <div id="personList" class="person-list"></div>
+    <button class="primary" id="modalAddPerson">+ Neue Person hinzufügen</button>
+  </div>
+</div>
+
+<nav>
+  <button data-tab="todayView" class="active"><span class="icon">●</span>Heute</button>
+  <button data-tab="historyView"><span class="icon">≡</span>Verlauf</button>
+  <button data-tab="analysisView"><span class="icon">⌁</span>Analyse</button>
+  <button data-tab="settingsView"><span class="icon">⚙</span>Mehr</button>
+</nav>
+
+<script>
+const METRICS = [
+  ["energy","Energie"],
+  ["mood","Stimmung"],
+  ["irritability","Reizbarkeit"],
+  ["emotionality","Emotionalität"],
+  ["stress","Stress"]
+];
+
+const KEY = "zyklusChallenge_people_v3";
+let app = {
+  currentPersonId: "p1",
+  people: {
+    p1: { id:"p1", name:"Person 1", settings:{threshold:70}, entries:{} }
+  }
+};
+let current = { energy:null,mood:null,irritability:null,emotionality:null,stress:null,disturbance:false,note:"" };
+
+function activePerson(){ return app.people[app.currentPersonId]; }
+function activeEntries(){ return activePerson().entries; }
+function activeSettings(){ return activePerson().settings; }
+
+function localISODate(d=new Date()){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), day=String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+function parseDate(s){ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); }
+function fmtDate(s){ if(!s) return "–"; const d=parseDate(s); return d.toLocaleDateString("de-CH",{day:"2-digit",month:"2-digit",year:"2-digit"}); }
+function daysBetween(a,b){ return Math.round((parseDate(b)-parseDate(a))/86400000); }
+function addDays(s,n){ const d=parseDate(s); d.setDate(d.getDate()+n); return localISODate(d); }
+
+function saveState(){ localStorage.setItem(KEY,JSON.stringify(app)); }
+function loadState(){
+  try{
+    const x=JSON.parse(localStorage.getItem(KEY));
+    if(x && x.people && x.currentPersonId){
+      app=x;
+      return;
+    }
+  }catch(e){}
+  // Migration from the older single-person version
+  try{
+    const oldState=JSON.parse(localStorage.getItem("zyklusChallenge_v2"));
+    const oldSettings=JSON.parse(localStorage.getItem("zyklusChallenge_settings_v2"));
+    if(oldState && oldState.entries){
+      app.people.p1.entries=oldState.entries;
+      if(oldSettings) app.people.p1.settings={...app.people.p1.settings,...oldSettings};
+      saveState();
+    }
+  }catch(e){}
+}
+
+function renderMetrics(){
+  const wrap=document.getElementById("metrics"); wrap.innerHTML="";
+  METRICS.forEach(([key,label])=>{
+    const d=document.createElement("div"); d.className="metric";
+    d.innerHTML=`<div class="metric-head"><span class="metric-name">${label}</span><span class="value-badge" id="${key}Val">${current[key]??"–"}</span></div>
+      <div class="scale">${[1,2,3,4,5].map(v=>`<button type="button" data-key="${key}" data-val="${v}" class="${current[key]===v?"active":""}">${v}</button>`).join("")}</div>`;
+    wrap.appendChild(d);
+  });
+  wrap.querySelectorAll("[data-key]").forEach(btn=>btn.onclick=()=>{
+    current[btn.dataset.key]=Number(btn.dataset.val); renderMetrics();
+  });
+}
+function renderDisturbance(){
+  document.querySelectorAll("[data-disturbance]").forEach(b=>{
+    const val=b.dataset.disturbance==="true"; b.classList.toggle("active",current.disturbance===val);
+  });
+}
+function loadDate(date){
+  const e=activeEntries()[date];
+  current = e ? JSON.parse(JSON.stringify(e)) : { energy:null,mood:null,irritability:null,emotionality:null,stress:null,disturbance:false,note:"" };
+  renderMetrics(); renderDisturbance(); document.getElementById("noteInput").value=current.note||"";
+}
+
+function rawScore(e){
+  if(!e || e.disturbance) return null;
+  if(METRICS.some(([k])=>!Number.isFinite(Number(e[k])))) return null;
+  const val=((6-e.energy)+(6-e.mood)+e.irritability+e.emotionality+e.stress-5)/20*100;
+  return Math.max(0,Math.min(100,val));
+}
+function processed(){
+  const dates=Object.keys(activeEntries()).sort();
+  const rows=[];
+  dates.forEach((date,i)=>{
+    const raw=rawScore(activeEntries()[date]);
+    let baseline=null;
+    if(raw!==null){
+      const prev=rows.slice(Math.max(0,rows.length-7)).map(x=>x.raw).filter(x=>x!==null);
+      if(prev.length>=5) baseline=prev.reduce((a,b)=>a+b,0)/prev.length;
+    }
+    const rel=raw===null?null:(baseline===null?raw:Math.max(0,Math.min(100,0.7*raw+0.3*(50+(raw-baseline)*2))));
+    rows.push({date,raw,baseline,rel,event:false});
+  });
+  let lastEventDate=null;
+  rows.forEach(r=>{
+    if(r.rel!==null && r.rel>=activeSettings().threshold){
+      if(!lastEventDate || daysBetween(lastEventDate,r.date)>=14){
+        r.event=true; lastEventDate=r.date;
+      }
+    }
+  });
+  return rows;
+}
+function rhythmInfo(rows){
+  const events=rows.filter(r=>r.event).map(r=>r.date);
+  if(events.length<2) return {events,rhythm:null,next:null};
+  const ints=[];
+  for(let i=1;i<events.length;i++){
+    const d=daysBetween(events[i-1],events[i]);
+    if(d>=21 && d<=35) ints.push(d);
+  }
+  if(!ints.length) return {events,rhythm:null,next:null};
+  const rhythm=Math.round(ints.reduce((a,b)=>a+b,0)/ints.length);
+  return {events,rhythm,next:addDays(events[events.length-1],rhythm)};
+}
+function renderHistory(){
+  const rows=processed().slice().reverse();
+  document.getElementById("entryCount").textContent=`${rows.length} Einträge`;
+  const el=document.getElementById("historyList");
+  if(!rows.length){el.innerHTML='<div class="empty">Noch keine Einträge.</div>';return;}
+  el.innerHTML=rows.map(r=>{
+    const e=activeEntries()[r.date];
+    const compact=`E ${e.energy??"–"} · St ${e.mood??"–"} · R ${e.irritability??"–"} · Em ${e.emotionality??"–"} · Str ${e.stress??"–"}`;
+    return `<div class="item" data-edit="${r.date}">
+      <div><div class="date">${fmtDate(r.date)}</div><div class="mini">${compact}</div>${e.note?`<div class="mini">${escapeHtml(e.note)}</div>`:""}</div>
+      <div class="badge ${r.event?"hot":""}">${r.rel===null?"–":Math.round(r.rel)}${r.event?" · Ereignis":""}</div>
+    </div>`;
+  }).join("");
+  el.querySelectorAll("[data-edit]").forEach(x=>x.onclick=()=>{
+    document.getElementById("dateInput").value=x.dataset.edit; loadDate(x.dataset.edit); switchTab("todayView");
+  });
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));}
+
+function drawChart(rows){
+  const c=document.getElementById("chart"), ctx=c.getContext("2d");
+  const w=c.width,h=c.height; ctx.clearRect(0,0,w,h);
+  ctx.fillStyle="#172033"; ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle="#334155"; ctx.lineWidth=1;
+  [0,25,50,75,100].forEach(v=>{
+    const y=h-20-(v/100)*(h-40); ctx.beginPath();ctx.moveTo(28,y);ctx.lineTo(w-10,y);ctx.stroke();
+  });
+  const vals=rows.filter(r=>r.rel!==null).slice(-60);
+  if(vals.length<2) return;
+  ctx.strokeStyle="#38bdf8"; ctx.lineWidth=3; ctx.beginPath();
+  vals.forEach((r,i)=>{
+    const x=28+(i/(vals.length-1))*(w-42);
+    const y=h-20-(r.rel/100)*(h-40);
+    if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }); ctx.stroke();
+  ctx.fillStyle="#f59e0b";
+  vals.filter(r=>r.event).forEach(r=>{
+    const i=vals.indexOf(r), x=28+(i/(vals.length-1))*(w-42), y=h-20-(r.rel/100)*(h-40);
+    ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
+  });
+}
+function renderAnalysis(){
+  const rows=processed();
+  const last=[...rows].reverse().find(r=>r.rel!==null);
+  const info=rhythmInfo(rows);
+  document.getElementById("currentScore").textContent=last?Math.round(last.rel):"–";
+  document.getElementById("eventCount").textContent=info.events.length;
+  document.getElementById("rhythm").textContent=info.rhythm?`${info.rhythm} T`:"–";
+  document.getElementById("nextEvent").textContent=info.next?fmtDate(info.next):"–";
+  let text="";
+  if(rows.length<42) text="Noch zu wenig Daten. Ab ungefähr 6 Wochen wird der Vergleich interessanter.";
+  else if(info.events.length<2) text="Es wurden noch nicht genügend getrennte Verdachtsereignisse gefunden, um einen Rhythmus abzuleiten.";
+  else if(!info.rhythm) text="Es gibt Verdachtsereignisse, aber ihre Abstände ergeben bisher keinen stabilen Rhythmus zwischen 21 und 35 Tagen.";
+  else text=`Die bisherigen auffälligen Verhaltenscluster liegen im Mittel etwa ${info.rhythm} Tage auseinander. Das nächste ähnliche Ereignis würde deshalb ungefähr am ${fmtDate(info.next)} liegen. Das ist nur eine Verhaltensprognose – nicht der Beweis für einen Zyklustag.`;
+  document.getElementById("analysisText").textContent=text;
+  drawChart(rows);
+}
+function renderAll(){ renderHistory(); renderAnalysis(); }
+
+function switchTab(id){
+  ["todayView","historyView","analysisView","settingsView"].forEach(x=>document.getElementById(x).classList.toggle("hidden",x!==id));
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===id));
+  if(id==="historyView")renderHistory();
+  if(id==="analysisView")renderAnalysis();
+}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+
+document.querySelectorAll("[data-disturbance]").forEach(b=>b.onclick=()=>{
+  current.disturbance=b.dataset.disturbance==="true"; renderDisturbance();
+});
+
+document.getElementById("dateInput").addEventListener("change",e=>loadDate(e.target.value));
+document.getElementById("noteInput").addEventListener("input",e=>current.note=e.target.value);
+
+document.getElementById("saveBtn").onclick=()=>{
+  const date=document.getElementById("dateInput").value;
+  if(!date) return alert("Bitte Datum auswählen.");
+  const missing=METRICS.filter(([k])=>current[k]===null).map(x=>x[1]);
+  if(missing.length) return alert("Bitte alle 5 Werte bewerten.");
+  current.note=document.getElementById("noteInput").value.trim();
+  activeEntries()[date]=JSON.parse(JSON.stringify(current)); saveState(); renderAll();
+  const btn=document.getElementById("saveBtn"); const old=btn.textContent; btn.textContent="Gespeichert ✓";
+  setTimeout(()=>btn.textContent=old,1200);
+};
+
+document.getElementById("thresholdSelect").addEventListener("change",e=>{
+  activePerson().settings.threshold=Number(e.target.value); saveState(); renderAll();
+});
+
+document.getElementById("exportBtn").onclick=()=>{
+  const payload={version:3,exportedAt:new Date().toISOString(),app};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`zyklus-challenge-backup-${localISODate()}.json`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+document.getElementById("importBtn").onclick=()=>document.getElementById("importFile").click();
+document.getElementById("importFile").addEventListener("change",async e=>{
+  const f=e.target.files[0]; if(!f)return;
+  try{
+    const obj=JSON.parse(await f.text());
+    if(obj.app?.people){
+      app=obj.app;
+    }else if(obj.state?.entries){
+      const id="p1";
+      app={
+        currentPersonId:id,
+        people:{
+          [id]:{
+            id,
+            name:"Person 1",
+            settings:{threshold:70,...(obj.settings||{})},
+            entries:obj.state.entries
+          }
+        }
+      };
+    }else{
+      throw new Error();
+    }
+    saveState(); init();
+    alert("Import erfolgreich.");
+  }catch(_){alert("Diese Datei konnte nicht importiert werden.");}
+  e.target.value="";
+});
+document.getElementById("resetBtn").onclick=()=>{
+  if(confirm(`Wirklich alle gespeicherten Daten von "${activePerson().name}" löschen?`)){
+    activePerson().entries={}; saveState(); init();
+  }
+};
+
+
+function makePersonId(){
+  return "p_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,7);
+}
+function refreshPersonSelect(){
+  const sel=document.getElementById("personSelect");
+  sel.innerHTML="";
+  Object.values(app.people).forEach(p=>{
+    const o=document.createElement("option");
+    o.value=p.id;
+    o.textContent=p.name;
+    if(p.id===app.currentPersonId) o.selected=true;
+    sel.appendChild(o);
+  });
+}
+function addPerson(){
+  const name=prompt("Name der Person:");
+  if(!name || !name.trim()) return;
+  const id=makePersonId();
+  app.people[id]={id,name:name.trim(),settings:{threshold:70},entries:{}};
+  app.currentPersonId=id;
+  saveState();
+  init();
+  if(!document.getElementById("personModal").classList.contains("hidden")) renderPersonList();
+}
+function renamePerson(id){
+  const p=app.people[id];
+  if(!p) return;
+  const name=prompt("Neuer Name:",p.name);
+  if(!name || !name.trim()) return;
+  p.name=name.trim();
+  saveState();
+  refreshPersonSelect();
+  renderPersonList();
+}
+function deletePerson(id){
+  const ids=Object.keys(app.people);
+  if(ids.length<=1){
+    alert("Mindestens eine Person muss vorhanden bleiben.");
+    return;
+  }
+  const p=app.people[id];
+  if(!p) return;
+  if(!confirm(`"${p.name}" wirklich mit allen Einträgen löschen?`)) return;
+  delete app.people[id];
+  if(app.currentPersonId===id) app.currentPersonId=Object.keys(app.people)[0];
+  saveState();
+  init();
+  renderPersonList();
+}
+function renderPersonList(){
+  const wrap=document.getElementById("personList");
+  wrap.innerHTML="";
+  Object.values(app.people).forEach(p=>{
+    const row=document.createElement("div");
+    row.className="person-row";
+    row.innerHTML=`
+      <div class="person-name">${escapeHtml(p.name)}${p.id===app.currentPersonId?' <span class="small">(aktiv)</span>':''}</div>
+      <button data-rename="${p.id}">Umbenennen</button>
+      <button data-delete="${p.id}">Löschen</button>`;
+    wrap.appendChild(row);
+  });
+  wrap.querySelectorAll("[data-rename]").forEach(b=>b.onclick=()=>renamePerson(b.dataset.rename));
+  wrap.querySelectorAll("[data-delete]").forEach(b=>b.onclick=()=>deletePerson(b.dataset.delete));
+}
+function openPersonModal(){
+  renderPersonList();
+  document.getElementById("personModal").classList.remove("hidden");
+}
+function closePersonModal(){
+  document.getElementById("personModal").classList.add("hidden");
+}
+
+document.getElementById("personSelect").addEventListener("change",e=>{
+  app.currentPersonId=e.target.value;
+  saveState();
+  init();
+});
+document.getElementById("addPersonBtn").onclick=addPerson;
+document.getElementById("managePeopleBtn").onclick=openPersonModal;
+document.getElementById("modalAddPerson").onclick=addPerson;
+document.getElementById("closePersonModal").onclick=closePersonModal;
+document.getElementById("personModal").addEventListener("click",e=>{
+  if(e.target.id==="personModal") closePersonModal();
+});
+
+function init(){
+  loadState();
+  if(!app.people[app.currentPersonId]) app.currentPersonId=Object.keys(app.people)[0];
+  refreshPersonSelect();
+  const d=localISODate();
+  document.getElementById("dateInput").value=d;
+  document.getElementById("thresholdSelect").value=String(activeSettings().threshold);
+  loadDate(d);
+  renderAll();
+}
+init();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+</script>
+
+</body>
+</html>
