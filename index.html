@@ -97,6 +97,11 @@ nav button.active{color:var(--accent);font-weight:800}
 .hidden{display:none!important}
 canvas{width:100%;height:180px;background:var(--panel2);border-radius:14px}
 .small{font-size:12px;color:var(--muted)}
+.weight-row{display:grid;grid-template-columns:120px 1fr 44px;gap:10px;align-items:center;margin:10px 0}
+.weight-track{height:9px;background:#1f2937;border-radius:999px;overflow:hidden}
+.weight-fill{height:100%;background:var(--accent);border-radius:999px}
+.weight-pct{text-align:right;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+@media (max-width:390px){.weight-row{grid-template-columns:105px 1fr 40px;gap:8px}}
 hr{border:0;border-top:1px solid var(--line);margin:14px 0}
 @media (max-width:390px){
   main{padding:12px}.card{padding:14px}.scale button{padding:11px 0}
@@ -172,9 +177,18 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
   </div>
 
   <div class="card">
+    <div class="row space">
+      <h2 style="margin:0">Persönliches Lernmodell</h2>
+      <span class="badge" id="modelMode">Grundmodell</span>
+    </div>
+    <div id="weightsList" style="margin-top:12px"></div>
+    <div class="small" id="modelNote" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
     <h2>Score-Verlauf</h2>
     <canvas id="chart" width="640" height="240"></canvas>
-    <div class="small" style="margin-top:8px">Der Score steigt bei niedriger Energie/Stimmung und höherer Reizbarkeit, Emotionalität und Stress.</div>
+    <div class="small" style="margin-top:8px">Am Anfang werden alle 5 Merkmale gleich gewichtet. Mit genügend Daten gewichtet die App stärker, was sich bei dieser Person im erkannten Rhythmus tatsächlich wiederholt.</div>
   </div>
 
   <div class="card">
@@ -212,7 +226,8 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
     <h2>Wichtig</h2>
     <div class="notice">
       Diese App enthält absichtlich <b>keine Eingabe der tatsächlichen Periode</b>. Sie sucht nur nach wiederkehrenden Verhaltensmustern.
-      Ein gefundener Rhythmus kann auch durch Arbeit, Schule, Wochenenden, Schlaf oder Stress entstehen. Die Auswertung ist ein Experiment und keine medizinische Bestimmung.
+      Ab genügend Daten lernt sie pro Person, welche der fünf Merkmale sich in einem 21–35-Tage-Rhythmus am konsistentesten wiederholen, und passt deren Gewichtung an.
+      Ein gefundener Rhythmus kann trotzdem auch durch Arbeit, Schule, Wochenenden, Schlaf oder Stress entstehen. Die Auswertung ist ein Experiment und keine medizinische Bestimmung.
     </div>
   </div>
 </section>
@@ -311,17 +326,121 @@ function loadDate(date){
   renderMetrics(); renderDisturbance(); document.getElementById("noteInput").value=current.note||"";
 }
 
-function rawScore(e){
+function metricRisk(e,key){
+  const v=Number(e[key]);
+  if(key==="energy" || key==="mood") return (5-v)/4*100;
+  return (v-1)/4*100;
+}
+function pearson(xs,ys){
+  if(xs.length<8 || xs.length!==ys.length) return null;
+  const mx=xs.reduce((a,b)=>a+b,0)/xs.length;
+  const my=ys.reduce((a,b)=>a+b,0)/ys.length;
+  let num=0,dx=0,dy=0;
+  for(let i=0;i<xs.length;i++){
+    const a=xs[i]-mx,b=ys[i]-my;
+    num+=a*b; dx+=a*a; dy+=b*b;
+  }
+  if(dx<=1e-9 || dy<=1e-9) return null;
+  return num/Math.sqrt(dx*dy);
+}
+function adaptiveModel(){
+  const dates=Object.keys(activeEntries()).sort();
+  const valid=[];
+  dates.forEach(date=>{
+    const e=activeEntries()[date];
+    if(!e || e.disturbance) return;
+    if(METRICS.some(([k])=>!Number.isFinite(Number(e[k])))) return;
+    const risk={};
+    METRICS.forEach(([k])=>risk[k]=metricRisk(e,k));
+    valid.push({date,risk,dev:null});
+  });
+
+  const equalWeights=Object.fromEntries(METRICS.map(([k])=>[k,1/METRICS.length]));
+  if(valid.length<56){
+    return {adaptive:false,usable:valid.length,rhythm:null,confidence:0,weights:equalWeights,correlations:{}};
+  }
+
+  // Remove the person's recent baseline so the model looks for repeating changes,
+  // not simply whether someone is generally high/low on a metric.
+  valid.forEach((row,i)=>{
+    const prev=valid.slice(Math.max(0,i-7),i);
+    if(prev.length<5) return;
+    row.dev={};
+    METRICS.forEach(([k])=>{
+      const avg=prev.reduce((s,p)=>s+p.risk[k],0)/prev.length;
+      row.dev[k]=row.risk[k]-avg;
+    });
+  });
+
+  const byDate=new Map(valid.filter(r=>r.dev).map(r=>[r.date,r]));
+  let best=null;
+
+  for(let lag=21;lag<=35;lag++){
+    const corrs={};
+    let sum=0,count=0,pairsTotal=0;
+
+    METRICS.forEach(([k])=>{
+      const xs=[],ys=[];
+      byDate.forEach((row,date)=>{
+        const prev=byDate.get(addDays(date,-lag));
+        if(prev){
+          xs.push(prev.dev[k]);
+          ys.push(row.dev[k]);
+        }
+      });
+      pairsTotal=Math.max(pairsTotal,xs.length);
+      const c=pearson(xs,ys);
+      corrs[k]=c;
+      if(c!==null){
+        // Positive correlation means this feature tends to look similar one cycle later.
+        sum+=Math.max(0,c);
+        count++;
+      }
+    });
+
+    if(count<3 || pairsTotal<12) continue;
+    const score=sum/count;
+    if(!best || score>best.score) best={lag,score,corrs,pairs:pairsTotal};
+  }
+
+  if(!best || best.score<0.10){
+    return {adaptive:false,usable:valid.length,rhythm:best?.lag||null,confidence:best?Math.round(best.score*100):0,weights:equalWeights,correlations:best?.corrs||{}};
+  }
+
+  // Keep a floor so no single metric can completely dominate.
+  const rawWeights={};
+  let total=0;
+  METRICS.forEach(([k])=>{
+    const c=Math.max(0,best.corrs[k]||0);
+    rawWeights[k]=0.15+c;
+    total+=rawWeights[k];
+  });
+  const weights={};
+  METRICS.forEach(([k])=>weights[k]=rawWeights[k]/total);
+
+  return {
+    adaptive:true,
+    usable:valid.length,
+    rhythm:best.lag,
+    confidence:Math.min(100,Math.round(best.score*100)),
+    weights,
+    correlations:best.corrs,
+    pairs:best.pairs
+  };
+}
+function rawScore(e,model){
   if(!e || e.disturbance) return null;
   if(METRICS.some(([k])=>!Number.isFinite(Number(e[k])))) return null;
-  const val=((6-e.energy)+(6-e.mood)+e.irritability+e.emotionality+e.stress-5)/20*100;
+  let val=0;
+  METRICS.forEach(([k])=>val+=metricRisk(e,k)*(model?.weights?.[k]??0.2));
   return Math.max(0,Math.min(100,val));
 }
 function processed(){
+  const model=adaptiveModel();
   const dates=Object.keys(activeEntries()).sort();
   const rows=[];
   dates.forEach((date,i)=>{
-    const raw=rawScore(activeEntries()[date]);
+    const raw=rawScore(activeEntries()[date],model);
     let baseline=null;
     if(raw!==null){
       const prev=rows.slice(Math.max(0,rows.length-7)).map(x=>x.raw).filter(x=>x!==null);
@@ -330,27 +449,41 @@ function processed(){
     const rel=raw===null?null:(baseline===null?raw:Math.max(0,Math.min(100,0.7*raw+0.3*(50+(raw-baseline)*2))));
     rows.push({date,raw,baseline,rel,event:false});
   });
+
   let lastEventDate=null;
   rows.forEach(r=>{
     if(r.rel!==null && r.rel>=activeSettings().threshold){
       if(!lastEventDate || daysBetween(lastEventDate,r.date)>=14){
-        r.event=true; lastEventDate=r.date;
+        r.event=true;
+        lastEventDate=r.date;
       }
     }
   });
+  rows.model=model;
   return rows;
 }
 function rhythmInfo(rows){
   const events=rows.filter(r=>r.event).map(r=>r.date);
-  if(events.length<2) return {events,rhythm:null,next:null};
+  const learnedRhythm=rows.model?.adaptive ? rows.model.rhythm : null;
+
+  if(learnedRhythm && events.length){
+    return {
+      events,
+      rhythm:learnedRhythm,
+      next:addDays(events[events.length-1],learnedRhythm),
+      source:"learned"
+    };
+  }
+
+  if(events.length<2) return {events,rhythm:null,next:null,source:null};
   const ints=[];
   for(let i=1;i<events.length;i++){
     const d=daysBetween(events[i-1],events[i]);
     if(d>=21 && d<=35) ints.push(d);
   }
-  if(!ints.length) return {events,rhythm:null,next:null};
+  if(!ints.length) return {events,rhythm:null,next:null,source:null};
   const rhythm=Math.round(ints.reduce((a,b)=>a+b,0)/ints.length);
-  return {events,rhythm,next:addDays(events[events.length-1],rhythm)};
+  return {events,rhythm,next:addDays(events[events.length-1],rhythm),source:"events"};
 }
 function renderHistory(){
   const rows=processed().slice().reverse();
@@ -393,19 +526,59 @@ function drawChart(rows){
     ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
   });
 }
+function renderWeights(model){
+  const labels=Object.fromEntries(METRICS);
+  const wrap=document.getElementById("weightsList");
+  wrap.innerHTML=METRICS.map(([k])=>{
+    const pct=Math.round((model.weights[k]||0)*100);
+    return `<div class="weight-row">
+      <div>${labels[k]}</div>
+      <div class="weight-track"><div class="weight-fill" style="width:${pct}%"></div></div>
+      <div class="weight-pct">${pct}%</div>
+    </div>`;
+  }).join("");
+
+  const mode=document.getElementById("modelMode");
+  const note=document.getElementById("modelNote");
+
+  if(model.adaptive){
+    mode.textContent="Adaptiv";
+    mode.classList.add("hot");
+    note.textContent=`${model.usable} verwertbare Tage · erkannter Wiederholungsrhythmus ca. ${model.rhythm} Tage · Modellstärke ${model.confidence}/100.`;
+  }else{
+    mode.textContent=model.usable<56 ? "Grundmodell" : "Lernphase";
+    mode.classList.remove("hot");
+    if(model.usable<56){
+      note.textContent=`${model.usable}/56 verwertbare Tage. Bis dahin werden Energie, Stimmung, Reizbarkeit, Emotionalität und Stress gleich stark gewichtet.`;
+    }else{
+      note.textContent=`${model.usable} verwertbare Tage. Die App sucht bereits nach einem wiederkehrenden 21–35-Tage-Muster, hat aber noch kein ausreichend deutliches persönliches Muster gefunden.`;
+    }
+  }
+}
 function renderAnalysis(){
   const rows=processed();
+  const model=rows.model;
   const last=[...rows].reverse().find(r=>r.rel!==null);
   const info=rhythmInfo(rows);
   document.getElementById("currentScore").textContent=last?Math.round(last.rel):"–";
   document.getElementById("eventCount").textContent=info.events.length;
   document.getElementById("rhythm").textContent=info.rhythm?`${info.rhythm} T`:"–";
   document.getElementById("nextEvent").textContent=info.next?fmtDate(info.next):"–";
+  renderWeights(model);
+
   let text="";
-  if(rows.length<42) text="Noch zu wenig Daten. Ab ungefähr 6 Wochen wird der Vergleich interessanter.";
-  else if(info.events.length<2) text="Es wurden noch nicht genügend getrennte Verdachtsereignisse gefunden, um einen Rhythmus abzuleiten.";
-  else if(!info.rhythm) text="Es gibt Verdachtsereignisse, aber ihre Abstände ergeben bisher keinen stabilen Rhythmus zwischen 21 und 35 Tagen.";
-  else text=`Die bisherigen auffälligen Verhaltenscluster liegen im Mittel etwa ${info.rhythm} Tage auseinander. Das nächste ähnliche Ereignis würde deshalb ungefähr am ${fmtDate(info.next)} liegen. Das ist nur eine Verhaltensprognose – nicht der Beweis für einen Zyklustag.`;
+  if(model.usable<42){
+    text="Noch zu wenig Daten für eine sinnvolle Musteranalyse. Der Score verwendet momentan das neutrale Grundmodell.";
+  }else if(model.usable<56){
+    text="Die App sammelt bereits genügend Verlauf für erste Vergleiche. Die persönliche Gewichtung startet ab 56 verwertbaren Tagen.";
+  }else if(!model.adaptive){
+    text="Es sind genug Daten vorhanden, aber bisher wiederholt sich keine Kombination der fünf Merkmale deutlich genug in einem 21–35-Tage-Rhythmus. Deshalb bleibt die App vorerst beim Grundmodell.";
+  }else if(!info.next){
+    text=`Die App hat ein wiederkehrendes Muster von ungefähr ${model.rhythm} Tagen erkannt und die Merkmale entsprechend personalisiert. Für eine zeitliche Vorhersage fehlt aber noch ein ausreichend starkes Verdachtsereignis als Ankerpunkt.`;
+  }else{
+    const strongest=[...METRICS].sort((a,b)=>(model.weights[b[0]]||0)-(model.weights[a[0]]||0)).slice(0,2).map(x=>x[1]).join(" und ");
+    text=`Das Modell hat sich an diese Person angepasst. Besonders viel Gewicht erhalten aktuell ${strongest}, weil diese Merkmale im erkannten Rhythmus am konsistentesten wiederkehren. Das nächste ähnliche Verhaltensereignis wird ungefähr für den ${fmtDate(info.next)} erwartet. Das ist weiterhin nur eine Musterprognose und kein Beweis für einen Periodentag.`;
+  }
   document.getElementById("analysisText").textContent=text;
   drawChart(rows);
 }

@@ -1,4 +1,4 @@
-const CACHE = "zyklus-challenge-v1";
+const CACHE = "zyklus-challenge-v2";
 const ASSETS = [
   "./",
   "./index.html",
